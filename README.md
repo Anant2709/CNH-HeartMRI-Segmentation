@@ -6,12 +6,12 @@ Quality-controlled baseline pipeline for cardiac MRI segmentation, with a staged
 Build a scientifically valid and reproducible segmentation baseline by first fixing data quality and split integrity, then implementing a minimal end-to-end training pipeline.
 
 ## Current Status
-- Planning and quality gates are documented in `manager_execution_plan.md`.
+- Planning and quality gates are documented in `execution_plan.md`.
 - Pairing audit artifacts exist in `reports/` and support Stage A (pairing policy finalization).
 - Dataset and training pipeline implementation are in progress.
 
 ## Repository Structure
-- `manager_execution_plan.md` - manager-facing staged execution roadmap (Stages A-F).
+- `execution_plan.md` - manager-facing staged execution roadmap (Stages A-F).
 - `progress_log.md` - running project notes and progress updates.
 - `reports/`
   - `pairing_mismatches.csv` - mismatch list for manual review/classification.
@@ -63,4 +63,4 @@ Progression between stages is gated by explicit criteria, including:
 
 ---
 
-For detailed deliverables, timeline, and risk register, see `manager_execution_plan.md`.
+For detailed deliverables, timeline, and risk register, see `execution_plan.md`.

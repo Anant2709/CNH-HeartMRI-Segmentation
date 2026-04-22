@@ -5,8 +5,9 @@ and basic label statistics for likely segmentation files.
 
 Requires: pip install SimpleITK numpy
 Run from anywhere:
-  python scripts/inspect_nrrd_dataset.py --root "/path/to/dataforAnwar"
-Default root is the parent of the scripts/ directory (project root).
+  python scripts/inspect_nrrd_dataset.py --root "/path/to/dataset"
+Default root: repository root, or the parent folder if it contains a `data/` directory
+(sibling layout: `Heart MRI Segmentation/data/` next to `CNH-HeartMRI-Segmentation/`).
 """
 
 from __future__ import annotations
@@ -131,7 +132,14 @@ def suggest_pairs(nrrd_files: list[Path]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Inspect NRRD cardiac MRI dataset layout.")
-    default_root = Path(__file__).resolve().parent.parent
+    repo_root = Path(__file__).resolve().parent.parent
+    workspace_root = repo_root.parent
+    if (repo_root / "data").is_dir():
+        default_root = repo_root
+    elif (workspace_root / "data").is_dir():
+        default_root = workspace_root
+    else:
+        default_root = repo_root
     parser.add_argument(
         "--root",
         type=Path,

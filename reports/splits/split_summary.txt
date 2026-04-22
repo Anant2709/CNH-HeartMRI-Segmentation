@@ -1,0 +1,11 @@
+Stage C split summary
+manifest: /Users/juhi2/Desktop/AnantUNI/CNH Part time/Heart MRI Segmentation/CNH-HeartMRI-Segmentation/reports/dataset_manifest.csv
+seed: 42
+internal val_fraction (patients): 0.2
+internal patients: 113 (train 90, val 23)
+external rows (all test): 19
+primary split counts:
+  test: 19
+  train: 90
+  val: 23
+mixed_site_cv: 5 fold files written

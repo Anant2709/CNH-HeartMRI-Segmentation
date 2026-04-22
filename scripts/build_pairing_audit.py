@@ -7,7 +7,8 @@ Outputs:
   - reports/pairing_mismatches.csv
 
 Usage:
-  python scripts/build_pairing_audit.py --root "/path/to/Heart MRI Segmentation"
+  python scripts/build_pairing_audit.py --root "/path/to/dataset"
+  # default writes CSVs to this repository's reports/; override with --out-dir
 """
 
 from __future__ import annotations
@@ -97,13 +98,14 @@ def choose_mask(image_path: Path, masks: list[Path]) -> Path | None:
 
 
 def main() -> None:
+    project_root = Path(__file__).resolve().parent.parent
     parser = argparse.ArgumentParser(description="Create image-mask pairing audit CSV.")
     parser.add_argument("--root", type=Path, required=True, help="Dataset root directory")
     parser.add_argument(
         "--out-dir",
         type=Path,
-        default=Path("reports"),
-        help="Output folder for CSV reports",
+        default=project_root / "reports",
+        help="Output folder for CSV reports (default: <repository>/reports)",
     )
     args = parser.parse_args()
 
@@ -164,7 +166,7 @@ def main() -> None:
 
         rows.append(row)
 
-    out_dir = args.out_dir if args.out_dir.is_absolute() else (root / args.out_dir)
+    out_dir = args.out_dir.expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
     df = pd.DataFrame(rows).sort_values(["site", "case_image"])
     df.to_csv(out_dir / "pairing_audit.csv", index=False)

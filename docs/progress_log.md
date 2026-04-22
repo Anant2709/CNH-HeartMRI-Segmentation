@@ -50,6 +50,9 @@ This document is both a **progress tracker** and a **master knowledge note** for
   - dataset inspection (`scripts/inspect_nrrd_dataset.py`)
   - checkpoint inspection (`scripts/inspect_torch_checkpoint.py`)
   - image-mask pairing audit (`scripts/build_pairing_audit.py`)
+  - baseline manifests: strict labels 0–4 + geometry-only list (`scripts/build_baseline_manifest.py`)
+  - Stage B dataset manifest + summary (`scripts/build_dataset_manifest.py`)
+  - Stage C leakage-aware splits (`scripts/build_splits.py`)
 - Immediate focus: pairing correctness, geometry consistency, and baseline protocol definition.
 
 ### Quick re-entry checklist (when you forget context)
@@ -127,11 +130,13 @@ python scripts/inspect_torch_checkpoint.py model/model.pt
 ### Step A kickoff — pairing policy and visual QA
 
 **Goal for Step A**
+
 - Finalize which image-mask pairs are valid for baseline training.
 - Resolve whether segmentations correspond to original volumes or cropped volumes.
 - Tag each mismatch case as approved/rejected/review with evidence.
 
 **Progress completed today**
+
 - Started Step A execution.
 - Updated `reports/pairing_mismatches.csv` with manual-review tracking fields:
   - `status` (default: `pending_review`)
@@ -140,23 +145,82 @@ python scripts/inspect_torch_checkpoint.py model/model.pt
 - Mismatch rows currently requiring review: **31**
 
 **How we will review each case**
+
 1. Load image + candidate mask in 3D Slicer.
 2. Check anatomical overlap in axial/sagittal/coronal views.
 3. Confirm whether mask aligns with cropped image, original image, or neither.
 4. Update CSV:
-   - `status = approved` if pairing is correct for baseline policy
-   - `status = rejected` if pairing is incorrect/unusable
-   - `status = review` if uncertain and needs clinical confirmation
-   - `slicer_checked = True` after manual check
-   - `review_notes` with short justification
+  - `status = approved` if pairing is correct for baseline policy
+  - `status = rejected` if pairing is incorrect/unusable
+  - `status = review` if uncertain and needs clinical confirmation
+  - `slicer_checked = True` after manual check
+  - `review_notes` with short justification
 
 **Step A policy draft (to validate)**
+
 - Baseline v1 candidate policy: prioritize **cropped image + matching segmentation** pairs.
 - Keep original images in dataset storage, but treat as non-baseline unless pairing is explicitly validated.
 - Do not include rows with unresolved label anomalies until label mapping is confirmed.
 
 **Immediate next actions**
+
 - Manually review the first 10 rows in `reports/pairing_mismatches.csv` in Slicer.
 - Confirm at least one internal case path for masks (internal currently appears mostly unpaired).
 - After first 10 reviews, summarize acceptance/rejection counts and update policy.
+
+# 21st April
+
+### Baseline manifest (Step A deferred; strict labels default)
+
+- **Decision:** Proceed with automated manifests; defer full Slicer Step A for later.
+- **Geometry rules:** `has_pair`, `size_match`, `spacing_match` all true; `needs_review` false; exclude multi-component (4D/cine) volumes unless `--include-4d`.
+- **Default label contract:** masks must contain **exactly** labels `{0,1,2,3,4}` (background + four structures from `model/labels.csv`). Rationale: `labels.csv` defines IDs **1–4** for anatomy and **0** is standard background; anything else is out-of-contract until CNH confirms (e.g. we saw a rare `5` in the audit).
+- **Script:** `scripts/build_baseline_manifest.py` — each run writes **two included lists** plus excluded sidecars:
+  - `reports/baseline_manifest_v1.csv` — strict **0–4** only (**132** rows on current audit)
+  - `reports/baseline_manifest_v1_excluded.csv` — not in strict list (geometry fails **or** label contract fails)
+  - `reports/baseline_manifest_v1_geometry_only.csv` — geometry-valid, **any** mask labels (**134** rows)
+  - `reports/baseline_manifest_v1_geometry_only_excluded.csv` — geometry failures only (**31** rows)
+- **Caveat:** Heuristic pairing + geometry match does not replace Slicer QA; revisit manifest after clinical review.
+
+```bash
+cd CNH-HeartMRI-Segmentation
+python scripts/build_baseline_manifest.py --data-root .
+```
+
+### Stage B — dataset manifest (done)
+
+- **Script:** `scripts/build_dataset_manifest.py` (reads strict `reports/baseline_manifest_v1.csv` by default).
+- **Deliverables:**
+  - `reports/dataset_manifest.csv` — **132** rows; columns: `sample_id`, `site`, `patient_id` (filename heuristic), `image_path`, `mask_path`, `is_cropped`, `is_4d`, `n_frames`, `size_xyz`, `spacing_xyz`, `labels_present`, `pairing_status`, `quality_flag`.
+  - `reports/dataset_manifest_summary.md` — counts by site / cropped / 4D / labels / quality.
+- **Command:** `python scripts/build_dataset_manifest.py --data-root .`
+- **Paths (NRRD root):** NRRDs live in sibling **`../data`** (i.e. `Heart MRI Segmentation/data/` with `External/` and `Internal/`). The manifest script now tries **`../data` first**, then `./data`, then the repo root, then the parent folder. Override anytime: `--media-root "/absolute/path/to/data"`.
+- **Next:** Stage D — baseline v1 protocol (`docs/baseline_v1_protocol.md`).
+
+### Stage C — splits (done)
+
+- **Script:** `scripts/build_splits.py`
+- **Policy doc:** `docs/split_policy_v1.md`
+- **Outputs:**
+  - `reports/splits/internal_train_val_external_test.csv` — internal → train/val by **patient_id**; external → **test** (19 rows).
+  - `reports/splits/mixed_site_cv_fold_00.csv` … `fold_04.csv` — optional 5-fold mixed-site CV.
+  - `reports/splits/split_summary.txt` — quick counts.
+- **Command:** `python scripts/build_splits.py --data-root .`
+- **Convention:** New scripts get a long module docstring + section comments; chat walkthrough stays **very detailed** for each new file as we add code.
+
+### Stage D — baseline protocol + metrics (done)
+
+- **Docs created:**
+  - `docs/baseline_v1_protocol.md`
+  - `docs/metrics_definition.md`
+- **What is frozen in v1:**
+  - label contract `{0..4}` and split usage (internal train/val, external test)
+  - preprocessing order (load -> orientation -> normalization -> spacing/patch policy)
+  - training objective family (multiclass with Dice+CE style objective)
+  - reporting requirements (per-class Dice, mean foreground Dice, site-stratified summaries)
+  - reproducibility guardrails (fixed split files, seed/config logging, no external tuning)
+- **Next:** Stage E — implement minimal train/eval pipeline:
+  - `scripts/train_baseline_v1.py`
+  - `scripts/eval_baseline_v1.py`
+
 
