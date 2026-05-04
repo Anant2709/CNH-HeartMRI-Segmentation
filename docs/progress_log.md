@@ -227,7 +227,10 @@ python scripts/build_baseline_manifest.py --data-root .
 
 - **Removed** (cleanup): TotalSegmentator baseline scripts and reports; old `runs/baseline_v1` smoke tree; long-form docs (`PROJECT_HANDOFF`, `execution_plan`, `baseline_v1_protocol`, `metrics_definition`, `split_policy_v1`, `START_HERE`, TotalSeg guide). **`docs/progress_log.md`** was recreated from the last committed version and extended (this file).
 - **Added / refreshed:**
-  - `scripts/monai_train_segmentation.py` — MONAI **3D U-Net** (`in_channels=1`, `out_channels=5`), **DiceCELoss**, **AdamW**, optional **CUDA AMP**, **RandCropByPosNegLabeld** + **SpatialPadd** for fixed patch batches, **sliding_window_inference** on val (and test if `--final-test`), mean **foreground Dice (classes 1–4)** with explicit empty-set rule.
+  - `scripts/monai_train_segmentation.py` — MONAI **3D U-Net** (`in_channels=1`, `out_channels=5`), **DiceCELoss**, **AdamW**, optional **CUDA AMP**, **RandCropByPosNegLabeld** + **SpatialPadd** for fixed patch batches, **sliding_window_inference** on val (and test if `--final-test`), mean **foreground Dice (classes 1–4)** with explicit empty-set rule (imports **`monai_segmentation_common.py`**).
+  - `scripts/monai_segmentation_common.py` — shared path resolution, transforms, U-Net builder, sliding-window + Dice helpers.
+  - `scripts/monai_eval_segmentation.py` / `scripts/monai_test_segmentation.py` — checkpoint eval on val/train/test (CSV + JSON + MD); test wrapper forces **split=test**.
+  - `slurm/train_a6000.slurm`, `slurm/eval_a6000.slurm`, `slurm/test_a6000.slurm` — GPU batch templates (edit `#SBATCH` / CUDA module for Nexus).
   - `requirements-training.txt` — `torch`, `monai`, `itk`, `pandas`, `numpy`.
   - `docs/DATASET.md` — full remake: label table, media root, every `reports/` artifact, regeneration order, link to training.
   - `docs/MONAI_TRAIN_SEGMENTATION.md` — line-by-line / math-heavy explanation of the training script.
@@ -244,4 +247,4 @@ python scripts/build_baseline_manifest.py --data-root .
 
 1. **Push** this branch to the remote; on Nexus **clone or pull** into `/fs/nexus-scratch/anant04/<project-dir>` (see `docs/COMPUTE_NEXUS.md`).
 2. **Rsync or stage NRRDs** to cluster-visible storage; pass `--media-root` to training.
-3. Implement **`scripts/monai_eval_segmentation.py`** (validation + optional prediction export) and a thin **test** wrapper or CLI flags — training already includes `--final-test` for a one-shot external summary.
+3. **Done:** `scripts/monai_segmentation_common.py` (shared train/eval), **`scripts/monai_eval_segmentation.py`** (per-case CSV + summaries + optional NRRD preds), **`scripts/monai_test_segmentation.py`** (test-only wrapper), **`slurm/train_a6000.slurm`**, **`slurm/eval_a6000.slurm`**, **`slurm/test_a6000.slurm`**. Optional later: bootstrap CIs on external test Dice; training still supports **`--final-test`** for a quick one-shot test pass without Slurm.

@@ -576,9 +576,13 @@ Uses the **same** preprocessing as validation (`val_tf`) and the **best** checkp
 
 ---
 
-## Suggested next implementation steps (codebase)
+## Related scripts (train / eval / test)
 
-1. **`scripts/monai_eval_segmentation.py`** — load `checkpoint_best.pt`, run `val_tf` + `validate_one` (or **save predicted NRRD** per case for Slicer QA), write **per-case and per-class** CSV + markdown summary. Keeps training script shorter and lets you eval without replaying epochs.
-2. **`scripts/monai_test_segmentation.py`** (or merge with eval via `--split test`) — frozen protocol: **only** external test, **no** hyperparameter decisions based on test metrics; optionally **bootstrap** CIs later for reporting.
+Training logic imports **`scripts/monai_segmentation_common.py`** (transforms, U-Net, sliding-window Dice). Line references in earlier sections still describe the same code paths; some definitions now live in that module instead of inline in `monai_train_segmentation.py`.
 
-This document should be updated if `monai_train_segmentation.py` changes materially (loss, transforms, or metric definitions).
+- **`scripts/monai_eval_segmentation.py`** — load a checkpoint, run val preprocessing + sliding-window inference, write **`eval_<split>_per_case.csv`**, **`eval_<split>_summary.json`**, **`eval_<split>_summary.md`**; optional **`--save-predictions-dir`** for ITK NRRD class maps (preprocessed grid).
+- **`scripts/monai_test_segmentation.py`** — always **`split=test`** with a reminder not to tune on test metrics.
+
+Optional later: **bootstrap confidence intervals** on external test Dice for reporting.
+
+This document should be updated if `monai_train_segmentation.py` or `monai_segmentation_common.py` changes materially (loss, transforms, or metric definitions).

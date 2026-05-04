@@ -33,6 +33,30 @@ python scripts/monai_train_segmentation.py --data-root . --epochs 1 \\
 
 Outputs go to `runs/segmentation/` (`config.json`, `checkpoint_best.pt`, `checkpoint_last.pt`, `history.csv`, `summary.json`).
 
+Shared helpers live in `scripts/monai_segmentation_common.py`.
+
+## Eval and test (no training)
+
+```bash
+# Validation split (or use --split train)
+python scripts/monai_eval_segmentation.py \
+  --data-root . --media-root /path/to/data \
+  --checkpoint runs/segmentation/checkpoint_best.pt \
+  --split val --out-dir reports/eval_val_01 --device cuda
+
+# External test only (wrapper; do not tune on these metrics)
+python scripts/monai_test_segmentation.py \
+  --data-root . --media-root /path/to/data \
+  --checkpoint runs/segmentation/checkpoint_best.pt \
+  --out-dir reports/test_external_01 --device cuda
+```
+
+Optional: `--save-predictions-dir /path/to/preds` writes one `*_pred.nrrd` per case (class map in **preprocessed** RAS grid; use for rough Slicer QA).
+
+## Slurm (GPU cluster)
+
+Templates under `slurm/` (`train_a6000.slurm`, `eval_a6000.slurm`, `test_a6000.slurm`). Set `REPO_ROOT`, `MEDIA_ROOT`, `RUN_DIR` / `CKPT` / `OUT_DIR` as in the file headers, then `sbatch slurm/train_a6000.slurm`. See [`docs/COMPUTE_NEXUS.md`](docs/COMPUTE_NEXUS.md) for `rsync`/`scp` from laptop to scratch.
+
 ## Documentation
 
 | Doc | Contents |

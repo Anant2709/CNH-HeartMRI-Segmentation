@@ -4,6 +4,90 @@ This runbook matches a **login node** session like `anant04@nexuscsd01` with scr
 
 ---
 
+## 0. Step-by-step: copy data from laptop to scratch
+
+**A. On your laptop** — open a terminal in the folder that **contains** `External/` and `Internal/` (often `Heart MRI Segmentation/data/`).
+
+**B. Create the target directory on Nexus** (SSH once):
+
+```bash
+ssh anant04@nexuscsd.umiacs.umd.edu "mkdir -p /fs/nexus-scratch/anant04/heart-mri-data"
+```
+
+**C. Copy with `rsync` (recommended)** — resumable, preserves timestamps, run from the **laptop**:
+
+```bash
+# From the parent of the folder that contains External/ and Internal/
+rsync -avz --progress "./data/" \
+  "anant04@nexuscsd.umiacs.umd.edu:/fs/nexus-scratch/anant04/heart-mri-data/"
+```
+
+If your tree is not named `data/`, point the source at the directory whose **children** are `External/` and `Internal/`:
+
+```bash
+rsync -avz --progress "/Users/you/path/to/nrrd_root/" \
+  "anant04@nexuscsd.umiacs.umd.edu:/fs/nexus-scratch/anant04/heart-mri-data/"
+```
+
+**Alternative: `scp` (simple but no resume)** — from laptop, copying one folder:
+
+```bash
+scp -r "/Users/you/path/to/data/External" \
+  "anant04@nexuscsd.umiacs.umd.edu:/fs/nexus-scratch/anant04/heart-mri-data/"
+scp -r "/Users/you/path/to/data/Internal" \
+  "anant04@nexuscsd.umiacs.umd.edu:/fs/nexus-scratch/anant04/heart-mri-data/"
+```
+
+**D. On Nexus, verify:**
+
+```bash
+ls /fs/nexus-scratch/anant04/heart-mri-data/External | head
+ls /fs/nexus-scratch/anant04/heart-mri-data/Internal | head
+```
+
+**E. Clone repo, venv, train** — see sections 2–4 and **Slurm** below. Training command (interactive GPU session):
+
+```bash
+export REPO_ROOT=/fs/nexus-scratch/anant04/CNH-HeartMRI-Segmentation
+export MEDIA_ROOT=/fs/nexus-scratch/anant04/heart-mri-data
+cd "$REPO_ROOT"
+source .venv/bin/activate
+python scripts/monai_train_segmentation.py \
+  --data-root "$REPO_ROOT" \
+  --media-root "$MEDIA_ROOT" \
+  --out-dir /fs/nexus-scratch/anant04/runs/segmentation_01 \
+  --device cuda --amp --epochs 100
+```
+
+**F. After training — eval (val) and test (external):**
+
+```bash
+python scripts/monai_eval_segmentation.py \
+  --data-root "$REPO_ROOT" --media-root "$MEDIA_ROOT" \
+  --checkpoint /fs/nexus-scratch/anant04/runs/segmentation_01/checkpoint_best.pt \
+  --split val --out-dir /fs/nexus-scratch/anant04/reports/eval_val_01 --device cuda
+
+python scripts/monai_test_segmentation.py \
+  --data-root "$REPO_ROOT" --media-root "$MEDIA_ROOT" \
+  --checkpoint /fs/nexus-scratch/anant04/runs/segmentation_01/checkpoint_best.pt \
+  --out-dir /fs/nexus-scratch/anant04/reports/test_external_01 --device cuda
+```
+
+Results: `eval_val_*_per_case.csv`, `eval_val_*_summary.md`, and the same pattern for `eval_test_*` from the test script.
+
+**G. Slurm batch jobs (RTX A6000–style templates)** — from `$REPO_ROOT` after setting env vars:
+
+```bash
+export REPO_ROOT MEDIA_ROOT RUN_DIR CKPT OUT_DIR   # see slurm/*.slurm headers
+sbatch slurm/train_a6000.slurm
+sbatch slurm/eval_a6000.slurm
+sbatch slurm/test_a6000.slurm
+```
+
+Edit `#SBATCH` lines inside `slurm/*.slurm` for your partition, time limit, and optional A6000 constraint.
+
+---
+
 ## 1. Recommended layout on scratch
 
 Keep **large NRRD trees** and **training outputs** on scratch; keep **the git repo** there too so checkpoints and `runs/` do not fill your home directory.
