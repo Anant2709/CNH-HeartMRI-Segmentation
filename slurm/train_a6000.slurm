@@ -28,6 +28,12 @@ set -euo pipefail
 : "${MEDIA_ROOT:?export MEDIA_ROOT=/path/to/heart-mri-data}"
 : "${RUN_DIR:?export RUN_DIR=/path/to/runs/segmentation_exp01}"
 
+if [[ ! -d "${REPO_ROOT}" ]]; then
+  echo "ERROR: REPO_ROOT is not a directory: '${REPO_ROOT}'" >&2
+  echo "Typo check: path must be .../CNH-HeartMRI-Segmentation (final 'n')." >&2
+  exit 1
+fi
+
 if command -v module >/dev/null 2>&1; then
   # Prolog or login may preload CUDA; loading another default causes "Conflicting cuda is loaded".
   module unload cuda cuda/12.1 cuda/12.1.1 cuda/13.1.1 2>/dev/null || true
@@ -42,6 +48,9 @@ fi
 cd "${REPO_ROOT}"
 source "${REPO_ROOT}/.venv/bin/activate"
 mkdir -p "${RUN_DIR}"
+
+# Line-buffer stdout/stderr so train-<jobid>.out updates during long epochs (default is block-buffered).
+export PYTHONUNBUFFERED=1
 
 python scripts/monai_train_segmentation.py \
   --data-root "${REPO_ROOT}" \

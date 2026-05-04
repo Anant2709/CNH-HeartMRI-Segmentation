@@ -92,6 +92,8 @@ Edit `#SBATCH` lines inside `slurm/*.slurm` for your partition, time limit, and 
 
 **You do not need to repeat the interactive train/eval commands if you prefer Slurm** — the Slurm scripts run the same `python scripts/...` lines. The only hard requirement is **one-time (or occasional) venv + `pip install -r requirements-training.txt`** on scratch, because the job script **sources** `${REPO_ROOT}/.venv` but does not create it. Optional: run a one-minute interactive GPU session first to confirm `torch.cuda.is_available()` before submitting a long `sbatch`.
 
+**Slurm `train-<jobid>.out` looks empty while the job runs:** Python **buffers** stdout when not attached to a TTY, so `print` lines may not appear until the buffer fills or the process exits. The Slurm scripts set **`export PYTHONUNBUFFERED=1`** so logs stream. For a job already submitted without that, check progress via **`ls -la "$RUN_DIR"`** (e.g. growing `history.csv` / checkpoints) or wait for the first epoch to finish.
+
 ---
 
 ## 1. Recommended layout on scratch

@@ -23,6 +23,12 @@ set -euo pipefail
 : "${CKPT:?}"
 : "${OUT_DIR:?}"
 
+if [[ ! -d "${REPO_ROOT}" ]]; then
+  echo "ERROR: REPO_ROOT is not a directory: '${REPO_ROOT}'" >&2
+  echo "Typo check: path must be .../CNH-HeartMRI-Segmentation (final 'n')." >&2
+  exit 1
+fi
+
 if command -v module >/dev/null 2>&1; then
   module unload cuda cuda/12.1 cuda/12.1.1 cuda/13.1.1 2>/dev/null || true
   module load "${CUDA_MODULE:-cuda/12.1.1}" \
@@ -35,6 +41,7 @@ fi
 cd "${REPO_ROOT}"
 source "${REPO_ROOT}/.venv/bin/activate"
 mkdir -p "${OUT_DIR}"
+export PYTHONUNBUFFERED=1
 
 python scripts/monai_eval_segmentation.py \
   --data-root "${REPO_ROOT}" \
