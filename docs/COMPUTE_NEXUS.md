@@ -157,7 +157,8 @@ Use a **venv** (or conda) **on scratch** so installs are writable and large.
 
 ```bash
 cd /fs/nexus-scratch/anant04/CNH-HeartMRI-Segmentation
-module load cuda/12.1   # example only — pick what `module avail` shows
+module unload cuda cuda/12.1 cuda/12.1.1 cuda/13.1.1 2>/dev/null || true
+module load cuda/12.1.1   # use `module avail cuda`; Slurm scripts default to 12.1.1 and honor CUDA_MODULE
 python3 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
@@ -179,9 +180,11 @@ python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_
 Many clusters require **`salloc`** or **`interact`** for GPU; login nodes may forbid long jobs. Example **Slurm**-style (names are illustrative — confirm with `cat /etc/slurm.conf` or cluster docs):
 
 ```bash
-salloc --partition=gpu --gres=gpu:1 --cpus-per-task=8 --mem=32G --time=4:00:00
+salloc --account=nexus --partition=tron --gres=gpu:1 --cpus-per-task=4 --mem=32G --time=4:00:00
 # wait for prompt, then:
 cd /fs/nexus-scratch/anant04/CNH-HeartMRI-Segmentation
+module unload cuda cuda/12.1 cuda/12.1.1 cuda/13.1.1 2>/dev/null || true
+module load cuda/12.1.1 || true
 source .venv/bin/activate
 python scripts/monai_train_segmentation.py \
   --data-root . \
@@ -215,7 +218,8 @@ Create `train.slurm` (edit partition, account, modules):
 
 set -euo pipefail
 mkdir -p /fs/nexus-scratch/anant04/logs
-module load cuda/12.1   # adjust
+module unload cuda cuda/12.1 cuda/12.1.1 cuda/13.1.1 2>/dev/null || true
+module load cuda/12.1.1   # adjust; avoid `module load cuda` alone if another CUDA is already loaded
 
 cd /fs/nexus-scratch/anant04/CNH-HeartMRI-Segmentation
 source .venv/bin/activate
@@ -240,6 +244,7 @@ sbatch train.slurm
 
 ## 7. Pitfalls
 
+- **CUDA module conflicts:** If the log shows `Unable to locate a modulefile for 'cuda/12.1'` then `Conflicting 'cuda' is loaded`, the batch script tried a wrong name, then a generic `cuda` pulled a **different** version than what Slurm already preloaded. Fix: **`module unload …`** then **`module load cuda/12.1.1`** (or whatever `module avail cuda` lists). Repo `slurm/*.slurm` scripts do this; override with `export CUDA_MODULE=cuda/X.Y.Z` before `sbatch`.
 - **Slurm partition name:** On **UMIACS Nexus**, the usual GPU partition is **`tron`**, not `gpu`. If you see `invalid partition specified: gpu`, set `#SBATCH --partition=tron` (and often `#SBATCH --account=nexus`) as in the repo `slurm/*.slurm` files. Confirm with `sinfo -o "%P %a" | head` or [UMIACS SLURM job submission](https://wiki.umiacs.umd.edu/umiacs/index.php/SLURM/JobSubmission). Override without editing the file: `sbatch --partition=tron --account=nexus slurm/train_a6000.slurm`.
 - **Slurm QoS / CPUs:** If you see `QoS default has a max CPUs per job of 4`, your association’s default QoS caps **`--cpus-per-task`** (and sometimes memory). Lower the script to **4 CPUs** (as in `slurm/train_a6000.slurm`) or ask UMIACS for a GPU QoS/partition that allows more. **`export REPO_ROOT` without `=...`** does not set paths — use full `export REPO_ROOT=/path/...` before `sbatch`.
 - **ITK / NRRD reads:** If you see import errors for `ITKReader`, ensure `itk` is installed (`requirements-training.txt` includes it). If **`Orientationd`** fails with **No module named `nibabel`**, run `pip install nibabel` (it is listed in `requirements-training.txt`). If multiprocessing workers crash, keep **`--num-workers 0`** (default in training script).

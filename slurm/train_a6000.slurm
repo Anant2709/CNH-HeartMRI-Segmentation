@@ -29,7 +29,14 @@ set -euo pipefail
 : "${RUN_DIR:?export RUN_DIR=/path/to/runs/segmentation_exp01}"
 
 if command -v module >/dev/null 2>&1; then
-  module load cuda/12.1 || module load cuda || true
+  # Prolog or login may preload CUDA; loading another default causes "Conflicting cuda is loaded".
+  module unload cuda cuda/12.1 cuda/12.1.1 cuda/13.1.1 2>/dev/null || true
+  # Use `module avail cuda` on Nexus; many nodes expose cuda/12.1.1 (not cuda/12.1). Override: export CUDA_MODULE=cuda/X.Y.Z
+  module load "${CUDA_MODULE:-cuda/12.1.1}" \
+    || module load cuda/12.1 \
+    || module load cuda/13.1.1 \
+    || module load cuda \
+    || true
 fi
 
 cd "${REPO_ROOT}"

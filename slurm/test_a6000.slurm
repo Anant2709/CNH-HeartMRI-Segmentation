@@ -25,7 +25,12 @@ set -euo pipefail
 : "${OUT_DIR:?}"
 
 if command -v module >/dev/null 2>&1; then
-  module load cuda/12.1 || module load cuda || true
+  module unload cuda cuda/12.1 cuda/12.1.1 cuda/13.1.1 2>/dev/null || true
+  module load "${CUDA_MODULE:-cuda/12.1.1}" \
+    || module load cuda/12.1 \
+    || module load cuda/13.1.1 \
+    || module load cuda \
+    || true
 fi
 
 cd "${REPO_ROOT}"
