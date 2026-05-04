@@ -102,8 +102,8 @@ def main() -> None:
     parser.add_argument(
         "--cv-folds",
         type=int,
-        default=5,
-        help="Number of folds for mixed_site_cv outputs (default 5). Use 0 to skip CV files.",
+        default=0,
+        help="Number of folds for mixed_site_cv outputs (default 0 = skip). Use 5 for five fold files.",
     )
     args = parser.parse_args()
 

@@ -8,4 +8,3 @@ primary split counts:
   test: 19
   train: 90
   val: 23
-mixed_site_cv: 5 fold files written

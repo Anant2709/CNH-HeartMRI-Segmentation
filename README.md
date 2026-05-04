@@ -1,66 +1,58 @@
 # Heart MRI Segmentation
 
-Quality-controlled baseline pipeline for cardiac MRI segmentation, with a staged roadmap from dataset curation to reproducible model training and later temporal (4D) extension.
+Pediatric cardiac MRI **3D multiclass segmentation** (five classes including background). This repo keeps **curated CSVs** (manifest + splits) and a **MONAI** training script; NRRDs stay on disk outside git.
 
-## Project Goal
-Build a scientifically valid and reproducible segmentation baseline by first fixing data quality and split integrity, then implementing a minimal end-to-end training pipeline.
+## Train (MONAI)
 
-## Current Status
-- Planning and quality gates are documented in `execution_plan.md`.
-- Pairing audit artifacts exist in `reports/` and support Stage A (pairing policy finalization).
-- Dataset and training pipeline implementation are in progress.
+```bash
+cd CNH-HeartMRI-Segmentation
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements-training.txt
+```
 
-## Repository Structure
-- `execution_plan.md` - manager-facing staged execution roadmap (Stages A-F).
-- `progress_log.md` - running project notes and progress updates.
-- `reports/`
-  - `pairing_mismatches.csv` - mismatch list for manual review/classification.
-  - `pairing_audit.csv` - pairing audit output.
-- `scripts/`
-  - `build_pairing_audit.py` - generates/updates pairing audit artifacts.
-  - `inspect_nrrd_dataset.py` - dataset inspection utilities.
-  - `inspect_torch_checkpoint.py` - checkpoint inspection utility.
-- `model/`
-  - `labels.csv` and related label mapping/reference files.
-- `Internal/imaging/`
-  - local imaging data samples (not intended as portable GitHub benchmark assets).
+Point `--media-root` at the folder that contains `External/` and `Internal/` if the default search does not find your NRRDs.
 
-## Staged Roadmap (v1)
-1. **Stage A - Finalize Pairing Policy**
-   - classify mismatches (expected/recoverable/unusable),
-   - verify representative cases in 3D Slicer,
-   - lock baseline pairing and label policy.
-2. **Stage B - Build Trainable Dataset Manifest**
-   - create deterministic `dataset_manifest.csv`,
-   - include metadata, labels, and pairing status,
-   - exclude unresolved rows.
-3. **Stage C - Define Leakage-Safe Splits**
-   - primary: internal train/val + external holdout test,
-   - alternate: mixed-site CV with strict patient-level grouping.
-4. **Stage D - Freeze Baseline v1 Protocol**
-   - per-frame 3D baseline design,
-   - preprocessing, labels, metrics, runtime constraints.
-5. **Stage E - Implement Minimal Train/Eval Pipeline**
-   - loader, preprocessing, train/val loops, logging,
-   - checkpoints + evaluation report.
-6. **Stage F - Plan 3D Aggregate -> 4D Transition**
-   - shortlist low-risk temporal extension after baseline stability.
+```bash
+python scripts/monai_train_segmentation.py --data-root . --epochs 100 --device auto
+```
 
-## Quality Gates
-Progression between stages is gated by explicit criteria, including:
-- trusted image-mask alignment by visual QA,
-- manifest rows with valid paths and approved pairing,
-- zero patient leakage across splits,
-- reproducible baseline protocol and first full train+eval run.
+Useful flags:
 
-## Immediate Next Milestones
-- Complete Stage A pairing decisions and visual QA sign-off.
-- Implement Stage B manifest builder and summary report generator.
+- `--media-root /path/to/data` — folder with `External/`, `Internal/`
+- `--patch-size 96 96 96` — 3D crop for training and sliding-window ROI
+- `--spacing-mm 1.2 1.2 1.2` — optional resample to fixed spacing (omit for native spacing)
+- `--amp` — mixed precision on CUDA
+- `--final-test` — after training, score the external **test** split once (no tuning on test)
 
-## Notes for GitHub
-- This repository is under active development; interfaces and scripts may evolve quickly.
-- Large/private medical imaging data should remain outside public version control and be referenced via manifests.
+Quick sanity check (small subset, short run):
 
----
+```bash
+python scripts/monai_train_segmentation.py --data-root . --epochs 1 \\
+  --max-train-cases 2 --max-val-cases 1 --val-interval 1
+```
 
-For detailed deliverables, timeline, and risk register, see `execution_plan.md`.
+Outputs go to `runs/segmentation/` (`config.json`, `checkpoint_best.pt`, `checkpoint_last.pt`, `history.csv`, `summary.json`).
+
+## Documentation
+
+| Doc | Contents |
+|-----|----------|
+| [`docs/DATASET.md`](docs/DATASET.md) | Manifests, splits, media root, regeneration commands |
+| [`docs/MONAI_TRAIN_SEGMENTATION.md`](docs/MONAI_TRAIN_SEGMENTATION.md) | Full walkthrough of `monai_train_segmentation.py` (math + code) |
+| [`docs/progress_log.md`](docs/progress_log.md) | Timeline and decisions |
+| [`docs/COMPUTE_NEXUS.md`](docs/COMPUTE_NEXUS.md) | UMIACS Nexus scratch + GPU + Slurm |
+
+## Dataset CSVs and splits
+
+See [`docs/DATASET.md`](docs/DATASET.md). Summary: `reports/dataset_manifest.csv` + `reports/splits/internal_train_val_external_test.csv` drive training.
+
+## Data QA scripts (optional maintenance)
+
+| Script | Role |
+|--------|------|
+| `scripts/build_pairing_audit.py` | Scan tree → pairing CSVs |
+| `scripts/build_baseline_manifest.py` | Strict / geometry manifests |
+| `scripts/build_dataset_manifest.py` | Stage B manifest + summary |
+| `scripts/build_splits.py` | Train/val/test CSV (`--cv-folds 5` optional) |
+| `scripts/inspect_nrrd_dataset.py` | NRRD metadata dump |
+| `scripts/inspect_torch_checkpoint.py` | Inspect `.pt` checkpoints |

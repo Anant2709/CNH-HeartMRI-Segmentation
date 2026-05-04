@@ -43,31 +43,26 @@ This document is both a **progress tracker** and a **master knowledge note** for
 - **4D/cine MRI:** sequence of 3D volumes over time (cardiac phases).
 - Practical plan: establish a stable **3D baseline first**, then move to temporal modeling.
 
-### Project stage (where we are now)
+### Project stage (where we are now) — updated May 2026
 
-- We are in **data understanding + QA phase**, not full model training yet.
-- We already have scripts for:
-  - dataset inspection (`scripts/inspect_nrrd_dataset.py`)
-  - checkpoint inspection (`scripts/inspect_torch_checkpoint.py`)
-  - image-mask pairing audit (`scripts/build_pairing_audit.py`)
-  - baseline manifests: strict labels 0–4 + geometry-only list (`scripts/build_baseline_manifest.py`)
-  - Stage B dataset manifest + summary (`scripts/build_dataset_manifest.py`)
-  - Stage C leakage-aware splits (`scripts/build_splits.py`)
-- Immediate focus: pairing correctness, geometry consistency, and baseline protocol definition.
+- **Data curation (Stages A–C)** is in place: pairing audit → baseline manifest → **dataset manifest** → **leakage-aware splits** (see [`docs/DATASET.md`](DATASET.md)).
+- **Model training:** primary entrypoint is **`scripts/monai_train_segmentation.py`** (MONAI 3D U-Net, Dice+CE, patch training + sliding-window validation). Deep walkthrough: [`docs/MONAI_TRAIN_SEGMENTATION.md`](MONAI_TRAIN_SEGMENTATION.md).
+- **Cluster / GPU:** runbook for UMIACS Nexus scratch: [`docs/COMPUTE_NEXUS.md`](COMPUTE_NEXUS.md).
+- **Next coding milestones:** dedicated **eval** script (val + exports) and optional **test-only** script or flags; training already supports `--final-test` once per run.
 
 ### Quick re-entry checklist (when you forget context)
 
 1. Read this section.
-2. Check **Latest execution snapshot**.
-3. Open `reports/pairing_mismatches.csv` and review unresolved cases.
-4. Continue with **Pre-next-meeting execution plan**.
+2. Open [`docs/DATASET.md`](DATASET.md) for CSV roles and regeneration commands.
+3. Open [`docs/MONAI_TRAIN_SEGMENTATION.md`](MONAI_TRAIN_SEGMENTATION.md) for training math and flags.
+4. Check `reports/pairing_mismatches.csv` if you are revisiting pairing QA.
 
 ## What we know
 
 - **Task (working hypothesis):** Learn or apply algorithms that segment pediatric cardiac structures from MRI, likely with interest in **time-resolved (cine)** data and single-ventricle anatomy. **Segmentation** = assigning each voxel (3D pixel) to a class (e.g. background, atrium, ventricle). **Ground truth** = expert-drawn masks used to train or evaluate models.
 - **Internal vs external:** **Internal** usually means data from the primary institution’s cohort (here: standardized paths like `imaging/` + `labels_standardized/`). **External** often means other sites or formats (e.g. `TCH-…`, `ARK-…`) for generalization testing. Confirm definitions with the hospital.
-- `**model.pt`:** Typically a **PyTorch checkpoint** (network weights, sometimes optimizer state). It is **not** self-explanatory: you need matching code (architecture + preprocessing) to run inference. **Not present in this Cursor workspace** as of last check — copy it into `model/` or point scripts at its path.
-- `**labels.csv` / `labels-USSERIKAPRISE-A.csv`:** Both list **label IDs 1–4** with names **Atrium, Ventricle, CPC, Arch** and DICOM/SNOMED-style coding columns. Likely a **label legend** for segmentations and/or training. The two files are **identical** in the current copy.
+- **`model.pt`:** Typically a **PyTorch checkpoint** (network weights, sometimes optimizer state). It is **not** self-explanatory: you need matching code (architecture + preprocessing) to run inference. **Not present in this Cursor workspace** as of last check — copy it into `model/` or point scripts at its path.
+- **`labels.csv` / `labels-USSERIKAPRISE-A.csv`:** Both list **label IDs 1–4** with names **Atrium, Ventricle, CPC, Arch** and DICOM/SNOMED-style coding columns. Likely a **label legend** for segmentations and/or training. The two files are **identical** in the current copy.
 - **Supervision:** If training uses these masks as targets, that is **supervised segmentation**. If you only run a pre-trained model, it is still *conceptually* supervised learning, but your immediate task may be **inference + evaluation** rather than training.
 - **3D vs 4D:** **3D** = one static 3D volume. **4D** = 3D + **time** (cine), e.g. 30 cardiac phases. Example inspected: `Internal/imaging/PreFontan 58.nrrd` is **4D NRRD** (`dimension: 4`, `sizes: 30 120 160 56`, `kinds: list domain domain domain`) — **30** time frames, **120×160×56** spatial grid. SimpleITK reports this as a **vector image** with **30 components per pixel**.
 - **Dataset inventory (this workspace):** **302** `.nrrd` files under the project root (mostly `External/`). **Internal** currently has **one** imaging file in `Internal/imaging/`. Many external **segmentations** use labels **[0,1,2,3,4]** (0 = background; 1–4 match the CSV). **Cropped** variants may **not** match full-resolution grid (verify pairs before training).
@@ -83,16 +78,26 @@ This document is both a **progress tracker** and a **master knowledge note** for
 ## Repository layout (suggested)
 
 ```text
-Heart MRI Segmentation/
+CNH-HeartMRI-Segmentation/
+  docs/
+    DATASET.md
+    MONAI_TRAIN_SEGMENTATION.md
+    progress_log.md
+    COMPUTE_NEXUS.md
   scripts/
-    inspect_nrrd_dataset.py    # scan .nrrd, shapes, spacing, label uniques for *seg* files
+    monai_train_segmentation.py
+    build_pairing_audit.py
+    build_baseline_manifest.py
+    build_dataset_manifest.py
+    build_splits.py
+    inspect_nrrd_dataset.py
     inspect_torch_checkpoint.py
-  notebooks/                   # optional exploratory visualization
-  model/
-    labels*.csv
-    model.pt                   # when available
-  Internal/ …  External/ …
-  progress_log.md
+  reports/
+    dataset_manifest.csv
+    splits/internal_train_val_external_test.csv
+    ...
+  requirements-training.txt
+  README.md
 ```
 
 ## Commands run
@@ -195,32 +200,48 @@ python scripts/build_baseline_manifest.py --data-root .
   - `reports/dataset_manifest_summary.md` — counts by site / cropped / 4D / labels / quality.
 - **Command:** `python scripts/build_dataset_manifest.py --data-root .`
 - **Paths (NRRD root):** NRRDs live in sibling **`../data`** (i.e. `Heart MRI Segmentation/data/` with `External/` and `Internal/`). The manifest script now tries **`../data` first**, then `./data`, then the repo root, then the parent folder. Override anytime: `--media-root "/absolute/path/to/data"`.
-- **Next:** Stage D — baseline v1 protocol (`docs/baseline_v1_protocol.md`).
+- **Documentation:** Stage B + C + path rules are summarized in **`docs/DATASET.md`** (May 2026 refresh).
 
 ### Stage C — splits (done)
 
 - **Script:** `scripts/build_splits.py`
-- **Policy doc:** `docs/split_policy_v1.md`
 - **Outputs:**
   - `reports/splits/internal_train_val_external_test.csv` — internal → train/val by **patient_id**; external → **test** (19 rows).
-  - `reports/splits/mixed_site_cv_fold_00.csv` … `fold_04.csv` — optional 5-fold mixed-site CV.
   - `reports/splits/split_summary.txt` — quick counts.
+- **Mixed-site CV:** optional; `python scripts/build_splits.py --data-root . --cv-folds 5` writes `mixed_site_cv_fold_*.csv`. **Default `--cv-folds` is now `0`** (primary split only) to reduce clutter unless CV is needed.
 - **Command:** `python scripts/build_splits.py --data-root .`
 - **Convention:** New scripts get a long module docstring + section comments; chat walkthrough stays **very detailed** for each new file as we add code.
 
-### Stage D — baseline protocol + metrics (done)
+### Stage D — baseline protocol + metrics (historical note)
 
-- **Docs created:**
-  - `docs/baseline_v1_protocol.md`
-  - `docs/metrics_definition.md`
-- **What is frozen in v1:**
-  - label contract `{0..4}` and split usage (internal train/val, external test)
-  - preprocessing order (load -> orientation -> normalization -> spacing/patch policy)
-  - training objective family (multiclass with Dice+CE style objective)
-  - reporting requirements (per-class Dice, mean foreground Dice, site-stratified summaries)
-  - reproducibility guardrails (fixed split files, seed/config logging, no external tuning)
-- **Next:** Stage E — implement minimal train/eval pipeline:
-  - `scripts/train_baseline_v1.py`
-  - `scripts/eval_baseline_v1.py`
+- Earlier repo versions committed **`docs/baseline_v1_protocol.md`** and **`docs/metrics_definition.md`** to freeze preprocessing and Dice reporting. Those files were **removed in the May 2026 simplification**; the substance is now carried by **`docs/DATASET.md`** (data contract) and **`docs/MONAI_TRAIN_SEGMENTATION.md`** (training + validation metric math).
+- **Design principles retained:** label contract `{0..4}`, internal train/val vs external test, no test-driven tuning, reproducible split CSV + seed.
 
+# 2 May 2026
 
+### Repo simplification + MONAI training path
+
+**Motivation:** Move from scattered “stage” docs and smoke artifacts to a **single reproducible training entrypoint** aligned with the existing manifest and split CSVs.
+
+**What changed**
+
+- **Removed** (cleanup): TotalSegmentator baseline scripts and reports; old `runs/baseline_v1` smoke tree; long-form docs (`PROJECT_HANDOFF`, `execution_plan`, `baseline_v1_protocol`, `metrics_definition`, `split_policy_v1`, `START_HERE`, TotalSeg guide). **`docs/progress_log.md`** was recreated from the last committed version and extended (this file).
+- **Added / refreshed:**
+  - `scripts/monai_train_segmentation.py` — MONAI **3D U-Net** (`in_channels=1`, `out_channels=5`), **DiceCELoss**, **AdamW**, optional **CUDA AMP**, **RandCropByPosNegLabeld** + **SpatialPadd** for fixed patch batches, **sliding_window_inference** on val (and test if `--final-test`), mean **foreground Dice (classes 1–4)** with explicit empty-set rule.
+  - `requirements-training.txt` — `torch`, `monai`, `itk`, `pandas`, `numpy`.
+  - `docs/DATASET.md` — full remake: label table, media root, every `reports/` artifact, regeneration order, link to training.
+  - `docs/MONAI_TRAIN_SEGMENTATION.md` — line-by-line / math-heavy explanation of the training script.
+  - `docs/COMPUTE_NEXUS.md` — how to run on **UMIACS Nexus** scratch (`/fs/nexus-scratch/...`), git + venv + Slurm sketch.
+  - `.gitignore` extended for `runs/**/*.pt` etc.
+- **`scripts/build_splits.py`:** default **`--cv-folds 0`** so mixed-site fold CSVs are opt-in.
+- **Regenerated** `reports/splits/internal_train_val_external_test.csv` and `split_summary.txt` after the default change (counts unchanged: train 90, val 23, test 19).
+
+**Smoke verification**
+
+- Ran `monai_train_segmentation.py` locally for **1 epoch**, **2 train / 1 val** cases on CPU after fixing batch stacking (SpatialPadd + fixed crop size). Removed local `runs/segmentation` afterward so the repo stays clean until a real GPU run.
+
+**Immediate next steps (engineering)**
+
+1. **Push** this branch to the remote; on Nexus **clone or pull** into `/fs/nexus-scratch/anant04/<project-dir>` (see `docs/COMPUTE_NEXUS.md`).
+2. **Rsync or stage NRRDs** to cluster-visible storage; pass `--media-root` to training.
+3. Implement **`scripts/monai_eval_segmentation.py`** (validation + optional prediction export) and a thin **test** wrapper or CLI flags — training already includes `--final-test` for a one-shot external summary.

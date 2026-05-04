@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+venv/
+.env
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+
+# Training outputs (keep run logs in git only if you want)
+runs/**/*.pt
+runs/**/*.pth
+runs/**/checkpoints/
