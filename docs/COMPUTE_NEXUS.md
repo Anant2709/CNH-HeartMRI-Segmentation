@@ -86,6 +86,8 @@ sbatch slurm/test_a6000.slurm
 
 Edit `#SBATCH` lines inside `slurm/*.slurm` for your partition, time limit, and optional A6000 constraint.
 
+**You do not need to repeat the interactive train/eval commands if you prefer Slurm** — the Slurm scripts run the same `python scripts/...` lines. The only hard requirement is **one-time (or occasional) venv + `pip install -r requirements-training.txt`** on scratch, because the job script **sources** `${REPO_ROOT}/.venv` but does not create it. Optional: run a one-minute interactive GPU session first to confirm `torch.cuda.is_available()` before submitting a long `sbatch`.
+
 ---
 
 ## 1. Recommended layout on scratch

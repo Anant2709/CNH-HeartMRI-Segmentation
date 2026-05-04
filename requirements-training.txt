@@ -1,6 +1,7 @@
 # Training stack (install in a venv). Pairing/manifest scripts only need pandas + SimpleITK.
 torch>=2.1.0
 monai>=1.3.0
+nibabel>=5.0
 itk>=5.3,<6
 pandas>=2.0
 numpy>=1.24
