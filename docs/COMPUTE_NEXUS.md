@@ -78,8 +78,12 @@ Results: `eval_val_*_per_case.csv`, `eval_val_*_summary.md`, and the same patter
 **G. Slurm batch jobs (RTX A6000–style templates)** — from `$REPO_ROOT` after setting env vars:
 
 ```bash
-export REPO_ROOT MEDIA_ROOT RUN_DIR CKPT OUT_DIR   # see slurm/*.slurm headers
+# Set each variable to a real path (do not run `export REPO_ROOT` with no `=...` — that does not assign values):
+export REPO_ROOT=/fs/nexus-scratch/anant04/CNH-HeartMRI-Segmentation
+export MEDIA_ROOT=/fs/nexus-scratch/anant04/heart-mri-data
+export RUN_DIR=/fs/nexus-scratch/anant04/runs/segmentation_01
 sbatch slurm/train_a6000.slurm
+# For eval / test, also: export CKPT=... export OUT_DIR=...
 sbatch slurm/eval_a6000.slurm
 sbatch slurm/test_a6000.slurm
 ```
@@ -203,8 +207,8 @@ Create `train.slurm` (edit partition, account, modules):
 #SBATCH --output=/fs/nexus-scratch/anant04/logs/%x-%j.out
 #SBATCH --error=/fs/nexus-scratch/anant04/logs/%x-%j.err
 #SBATCH --time=24:00:00
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=64G
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=32G
 #SBATCH --gres=gpu:1
 
 set -euo pipefail
@@ -234,7 +238,8 @@ sbatch train.slurm
 
 ## 7. Pitfalls
 
-- **ITK / NRRD reads:** If you see import errors for `ITKReader`, ensure `itk` is installed (`requirements-training.txt` includes it). If multiprocessing workers crash, keep **`--num-workers 0`** (default in training script).
+- **Slurm QoS / CPUs:** If you see `QoS default has a max CPUs per job of 4`, your association’s default QoS caps **`--cpus-per-task`** (and sometimes memory). Lower the script to **4 CPUs** (as in `slurm/train_a6000.slurm`) or ask UMIACS for a GPU QoS/partition that allows more. **`export REPO_ROOT` without `=...`** does not set paths — use full `export REPO_ROOT=/path/...` before `sbatch`.
+- **ITK / NRRD reads:** If you see import errors for `ITKReader`, ensure `itk` is installed (`requirements-training.txt` includes it). If **`Orientationd`** fails with **No module named `nibabel`**, run `pip install nibabel` (it is listed in `requirements-training.txt`). If multiprocessing workers crash, keep **`--num-workers 0`** (default in training script).
 - **Path mismatch:** If training prints “No training cases”, your **`--media-root`** does not contain the `External/...` paths exactly as in the CSV. Fix root or regenerate manifests with the same layout.
 - **Do not tune on test:** Use **`--final-test`** only when reporting a locked configuration; routine development uses **val** only.
 

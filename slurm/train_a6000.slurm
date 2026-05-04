@@ -2,8 +2,9 @@
 #SBATCH --job-name=heartseg-train
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=64G
+# Nexus default QoS often caps CPUs per job at 4; raise only if your association allows it.
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=32G
 #SBATCH --time=48:00:00
 #SBATCH --output=train-%j.out
 #SBATCH --error=train-%j.err
