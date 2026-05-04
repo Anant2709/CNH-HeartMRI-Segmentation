@@ -209,6 +209,8 @@ Create `train.slurm` (edit partition, account, modules):
 #SBATCH --time=24:00:00
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
+#SBATCH --account=nexus
+#SBATCH --partition=tron
 #SBATCH --gres=gpu:1
 
 set -euo pipefail
@@ -238,6 +240,7 @@ sbatch train.slurm
 
 ## 7. Pitfalls
 
+- **Slurm partition name:** On **UMIACS Nexus**, the usual GPU partition is **`tron`**, not `gpu`. If you see `invalid partition specified: gpu`, set `#SBATCH --partition=tron` (and often `#SBATCH --account=nexus`) as in the repo `slurm/*.slurm` files. Confirm with `sinfo -o "%P %a" | head` or [UMIACS SLURM job submission](https://wiki.umiacs.umd.edu/umiacs/index.php/SLURM/JobSubmission). Override without editing the file: `sbatch --partition=tron --account=nexus slurm/train_a6000.slurm`.
 - **Slurm QoS / CPUs:** If you see `QoS default has a max CPUs per job of 4`, your association’s default QoS caps **`--cpus-per-task`** (and sometimes memory). Lower the script to **4 CPUs** (as in `slurm/train_a6000.slurm`) or ask UMIACS for a GPU QoS/partition that allows more. **`export REPO_ROOT` without `=...`** does not set paths — use full `export REPO_ROOT=/path/...` before `sbatch`.
 - **ITK / NRRD reads:** If you see import errors for `ITKReader`, ensure `itk` is installed (`requirements-training.txt` includes it). If **`Orientationd`** fails with **No module named `nibabel`**, run `pip install nibabel` (it is listed in `requirements-training.txt`). If multiprocessing workers crash, keep **`--num-workers 0`** (default in training script).
 - **Path mismatch:** If training prints “No training cases”, your **`--media-root`** does not contain the `External/...` paths exactly as in the CSV. Fix root or regenerate manifests with the same layout.

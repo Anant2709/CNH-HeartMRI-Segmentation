@@ -1,6 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=heartseg-train
-#SBATCH --partition=gpu
+# UMIACS Nexus GPU pool is typically "tron" (not "gpu"). See: wiki SLURM/JobSubmission. Run: sinfo -o "%P %a" | head
+#SBATCH --account=nexus
+#SBATCH --partition=tron
 #SBATCH --gres=gpu:1
 # Nexus default QoS often caps CPUs per job at 4; raise only if your association allows it.
 #SBATCH --cpus-per-task=4

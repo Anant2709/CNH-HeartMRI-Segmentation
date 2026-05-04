@@ -1,6 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=heartseg-test
-#SBATCH --partition=gpu
+#SBATCH --account=nexus
+#SBATCH --partition=tron
 #SBATCH --gres=gpu:1
 # Nexus default QoS often caps at 4 CPUs per job (keep cpus-per-task <= 4 unless your QoS allows more).
 #SBATCH --cpus-per-task=4
