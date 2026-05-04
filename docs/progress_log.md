@@ -47,15 +47,18 @@ This document is both a **progress tracker** and a **master knowledge note** for
 
 - **Data curation (Stages A–C)** is in place: pairing audit → baseline manifest → **dataset manifest** → **leakage-aware splits** (see [`docs/DATASET.md`](DATASET.md)).
 - **Model training:** primary entrypoint is **`scripts/monai_train_segmentation.py`** (MONAI 3D U-Net, Dice+CE, patch training + sliding-window validation). Deep walkthrough: [`docs/MONAI_TRAIN_SEGMENTATION.md`](MONAI_TRAIN_SEGMENTATION.md).
-- **Cluster / GPU:** runbook for UMIACS Nexus scratch: [`docs/COMPUTE_NEXUS.md`](COMPUTE_NEXUS.md).
-- **Next coding milestones:** dedicated **eval** script (val + exports) and optional **test-only** script or flags; training already supports `--final-test` once per run.
+- **Eval / test (no training):** **`scripts/monai_eval_segmentation.py`** (any split, CSV + JSON + MD summaries, optional NRRD preds); **`scripts/monai_test_segmentation.py`** (external **`test`** only).
+- **Cluster / GPU:** runbook for UMIACS Nexus scratch: [`docs/COMPUTE_NEXUS.md`](COMPUTE_NEXUS.md); repo **`slurm/`** templates (`train` / `eval` / `test`) use **`partition=tron`**, **`account=nexus`**, **`PYTHONUNBUFFERED=1`**, CUDA unload/load.
+- **Latest baseline numbers (single primary split, Nexus-style run):** internal **val** mean foreground Dice **~0.72**; external **test** mean foreground Dice **~0.30** — large **domain shift**; treat external as honest generalization check, not for hyperparameter tuning.
+- **Next focus:** **internal k-fold benchmarking** via **`build_splits.py --internal-cv-folds K`** + repeated training with **`--split-csv`** per fold; aggregate val Dice (mean ± std across folds) for model comparison.
 
 ### Quick re-entry checklist (when you forget context)
 
 1. Read this section.
 2. Open [`docs/DATASET.md`](DATASET.md) for CSV roles and regeneration commands.
 3. Open [`docs/MONAI_TRAIN_SEGMENTATION.md`](MONAI_TRAIN_SEGMENTATION.md) for training math and flags.
-4. Check `reports/pairing_mismatches.csv` if you are revisiting pairing QA.
+4. Open [`docs/COMPUTE_NEXUS.md`](COMPUTE_NEXUS.md) if running on Slurm / scratch.
+5. Check `reports/pairing_mismatches.csv` if you are revisiting pairing QA.
 
 ## What we know
 
@@ -86,6 +89,9 @@ CNH-HeartMRI-Segmentation/
     COMPUTE_NEXUS.md
   scripts/
     monai_train_segmentation.py
+    monai_eval_segmentation.py
+    monai_test_segmentation.py
+    monai_segmentation_common.py
     build_pairing_audit.py
     build_baseline_manifest.py
     build_dataset_manifest.py
@@ -208,7 +214,7 @@ python scripts/build_baseline_manifest.py --data-root .
 - **Outputs:**
   - `reports/splits/internal_train_val_external_test.csv` — internal → train/val by **patient_id**; external → **test** (19 rows).
   - `reports/splits/split_summary.txt` — quick counts.
-- **Mixed-site CV:** optional; `python scripts/build_splits.py --data-root . --cv-folds 5` writes `mixed_site_cv_fold_*.csv`. **Default `--cv-folds` is now `0`** (primary split only) to reduce clutter unless CV is needed.
+- **CV outputs (optional):** `python scripts/build_splits.py --data-root . --cv-folds 5` writes **`mixed_site_cv_fold_*.csv`** (internal + external pooled). **`--internal-cv-folds 5`** writes **`internal_cv_fold_*.csv`** (internal only; for internal benchmarking). Defaults **`0`** for both unless requested.
 - **Command:** `python scripts/build_splits.py --data-root .`
 - **Convention:** New scripts get a long module docstring + section comments; chat walkthrough stays **very detailed** for each new file as we add code.
 
@@ -248,3 +254,13 @@ python scripts/build_baseline_manifest.py --data-root .
 1. **Push** this branch to the remote; on Nexus **clone or pull** into `/fs/nexus-scratch/anant04/<project-dir>` (see `docs/COMPUTE_NEXUS.md`).
 2. **Rsync or stage NRRDs** to cluster-visible storage; pass `--media-root` to training.
 3. **Done:** `scripts/monai_segmentation_common.py` (shared train/eval), **`scripts/monai_eval_segmentation.py`** (per-case CSV + summaries + optional NRRD preds), **`scripts/monai_test_segmentation.py`** (test-only wrapper), **`slurm/train_a6000.slurm`**, **`slurm/eval_a6000.slurm`**, **`slurm/test_a6000.slurm`**. Optional later: bootstrap CIs on external test Dice; training still supports **`--final-test`** for a quick one-shot test pass without Slurm.
+
+# 3 May 2026
+
+### Documentation refresh + internal CV splits
+
+- **Nexus / Slurm lessons** (partition **`tron`**, QoS **≤4 CPUs**, CUDA module **`cuda/12.1.1`** after explicit unloads, **`PYTHONUNBUFFERED=1`**, correct **`REPO_ROOT`**) are reflected in [`docs/COMPUTE_NEXUS.md`](COMPUTE_NEXUS.md) and the **`slurm/*.slurm`** headers.
+- **Dependencies:** `nibabel` is required for **`Orientationd`**; it is listed in **`requirements-training.txt`** (install via `pip install -r requirements-training.txt`).
+- **Results logged above:** one full training run on the primary split → strong **internal val**, weak **external test**; external remains a no-tuning benchmark.
+- **`scripts/build_splits.py`:** added **`--internal-cv-folds K`** to emit **`reports/splits/internal_cv_fold_*.csv`** (internal patients only, patient-level k-fold). Distinct from **`--cv-folds`** (**mixed_site** pool). See [`docs/DATASET.md`](DATASET.md) §3.4.
+- **Next engineering step:** run **K** trainings (or Slurm array) with **`--split-csv`** per fold, record **`best_val_mean_fg_dice`** per fold from each run’s `summary.json` (or re-run `monai_eval_segmentation.py --split val`), then report mean ± std for internal benchmarking.

@@ -27,16 +27,23 @@ WHY two strategies are produced
 
 2) **Mixed-site k-fold (secondary):**
    - Pool **internal + external** patients, partition into k folds.
-   - Useful later for "mixed training + cross-site validation" experiments.
+   - Useful for cross-site / mixed-pool experiments (not the same as internal-only CV).
    - Each fold file marks rows as **train** or **val** *for that fold only*;
-     there is no separate test column in those files (typical CV pattern).
+     there is no separate **test** column in those files (typical CV pattern).
+
+3) **Internal-only k-fold (optional):**
+   - **Internal** rows only; **external** rows are omitted from these CSVs.
+   - Patient-level folds (same leakage rule as the primary split).
+   - One file per fold: val = patients in that fold; train = all other internal patients.
+   - Use with ``--split-csv`` on training for a reproducible internal benchmark (mean val Dice over folds).
 
 Outputs (under ``reports/splits/`` by default)
 ----------------------------------------------
 - ``internal_train_val_external_test.csv`` — one row per manifest row;
   column ``split`` in {train, val, test}.
+- ``internal_cv_fold_00.csv`` … ``internal_cv_fold_{k-1}.csv`` — optional; internal-only k-fold (see ``--internal-cv-folds``).
 - ``mixed_site_cv_fold_00.csv`` … ``mixed_site_cv_fold_{k-1}.csv`` —
-  for each fold, which rows are train vs val for that fold.
+  for each fold, which rows are train vs val for that fold (internal + external pooled).
 
 No third-party deps (stdlib only).
 
@@ -44,6 +51,8 @@ Example
 -------
   cd CNH-HeartMRI-Segmentation
   python scripts/build_splits.py --data-root .
+  python scripts/build_splits.py --data-root . --internal-cv-folds 5
+  python scripts/build_splits.py --data-root . --cv-folds 5
 """
 
 from __future__ import annotations
@@ -104,6 +113,16 @@ def main() -> None:
         type=int,
         default=0,
         help="Number of folds for mixed_site_cv outputs (default 0 = skip). Use 5 for five fold files.",
+    )
+    parser.add_argument(
+        "--internal-cv-folds",
+        type=int,
+        default=0,
+        dest="internal_cv_folds",
+        help=(
+            "Number of folds for internal_cv_fold_*.csv (default 0 = skip). "
+            "Internal patients only; external rows excluded. Requires at least as many internal patients as folds."
+        ),
     )
     args = parser.parse_args()
 
@@ -269,6 +288,47 @@ def main() -> None:
                 w.writerows(fold_rows)
 
     # -------------------------------------------------------------------------
+    # Internal-only k-fold: internal patients partitioned into k folds;
+    # external rows omitted (use primary CSV for external holdout experiments).
+    # -------------------------------------------------------------------------
+    if args.internal_cv_folds and args.internal_cv_folds > 1:
+        internal_only_patients = sorted({r["patient_id"] for r in internal})
+        n_icv_pat = len(internal_only_patients)
+        if args.internal_cv_folds > n_icv_pat:
+            print(
+                f"ERROR: --internal-cv-folds ({args.internal_cv_folds}) exceeds internal patient count ({n_icv_pat}).",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        rng_icv = random.Random(args.seed)
+        icv_list = list(internal_only_patients)
+        rng_icv.shuffle(icv_list)
+        internal_patient_fold = {pid: i % args.internal_cv_folds for i, pid in enumerate(icv_list)}
+
+        for fold_id in range(args.internal_cv_folds):
+            icv_fold_rows: list[dict] = []
+            for r in internal:
+                pid = r["patient_id"]
+                pf = internal_patient_fold[pid]
+                role = "val" if pf == fold_id else "train"
+                icv_fold_rows.append(
+                    {
+                        "sample_id": r["sample_id"],
+                        "patient_id": pid,
+                        "site": r["site"],
+                        "split": role,
+                        "image_path": r["image_path"],
+                        "mask_path": r["mask_path"],
+                    }
+                )
+            icv_fold_rows.sort(key=lambda x: (x["split"], x["site"], x["patient_id"], x["sample_id"]))
+            icv_path = out_dir / f"internal_cv_fold_{fold_id:02d}.csv"
+            with icv_path.open("w", newline="", encoding="utf-8") as f:
+                w = csv.DictWriter(f, fieldnames=fields_primary)
+                w.writeheader()
+                w.writerows(icv_fold_rows)
+
+    # -------------------------------------------------------------------------
     # Human-readable summary for logs / meetings
     # -------------------------------------------------------------------------
     summary_path = out_dir / "split_summary.txt"
@@ -287,6 +347,8 @@ def main() -> None:
         lines.append(f"  {k}: {c[k]}")
     if args.cv_folds and args.cv_folds > 1:
         lines.append(f"mixed_site_cv: {args.cv_folds} fold files written")
+    if args.internal_cv_folds and args.internal_cv_folds > 1:
+        lines.append(f"internal_cv: {args.internal_cv_folds} fold files written (internal rows only)")
     summary_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     print(f"Wrote {primary_path}")
@@ -294,6 +356,9 @@ def main() -> None:
     if args.cv_folds and args.cv_folds > 1:
         for fold_id in range(args.cv_folds):
             print(f"Wrote {out_dir / f'mixed_site_cv_fold_{fold_id:02d}.csv'}")
+    if args.internal_cv_folds and args.internal_cv_folds > 1:
+        for fold_id in range(args.internal_cv_folds):
+            print(f"Wrote {out_dir / f'internal_cv_fold_{fold_id:02d}.csv'}")
 
 
 if __name__ == "__main__":

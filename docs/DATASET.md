@@ -104,13 +104,23 @@ Only rows with paths that exist under a resolved media root should show `ok_auto
 - **Internal** site rows: split by **patient_id** into **train** and **val** (default 20% of internal *patients* to val, at least one patient in val when possible).
 - **External** site rows: **all** assigned to **test** (holdout for generalization; do not tune hyperparameters on test).
 
-**Optional mixed-site k-fold** CSVs (`mixed_site_cv_fold_00.csv`, …) are **not** written unless you request them:
+**Optional split variants** (not written unless requested):
 
-```bash
-python scripts/build_splits.py --data-root . --cv-folds 5
-```
+1. **Internal-only k-fold** — `internal_cv_fold_00.csv`, … — **internal rows only** (external partner cases are omitted). Each file is one fold: **val** = internal patients assigned to that fold; **train** = remaining internal patients. Same columns as the primary CSV (`split` is only `train` or `val`). Use for **internal benchmarking** without contaminating val with external appearance. Requires at least as many internal **patients** as folds.
 
-Default is `--cv-folds 0` (primary split only).
+   ```bash
+   python scripts/build_splits.py --data-root . --internal-cv-folds 5
+   ```
+
+2. **Mixed-site k-fold** — `mixed_site_cv_fold_00.csv`, … — pools **internal + external** patients into folds (each row is `train` or `val` for that fold; extra column `fold_id`). Use when you explicitly want cross-site / mixed-pool CV, not a pure internal-only estimate.
+
+   ```bash
+   python scripts/build_splits.py --data-root . --cv-folds 5
+   ```
+
+Defaults: `--internal-cv-folds 0`, `--cv-folds 0` (primary split only). You can pass **both** flags in one run if you want both file families.
+
+**Training / eval:** Point `monai_train_segmentation.py` and `monai_eval_segmentation.py` at a fold CSV with **`--split-csv reports/splits/internal_cv_fold_00.csv`** (repeat per fold). **`--final-test`** has no effect on internal-only fold files (there is no `test` split in those rows).
 
 **Producer:**
 
@@ -134,7 +144,7 @@ python scripts/build_baseline_manifest.py --data-root .
 # 3) Dataset manifest + summary
 python scripts/build_dataset_manifest.py --data-root .
 
-# 4) Splits
+# 4) Splits (primary only; add --internal-cv-folds 5 and/or --cv-folds 5 if needed)
 python scripts/build_splits.py --data-root .
 ```
 

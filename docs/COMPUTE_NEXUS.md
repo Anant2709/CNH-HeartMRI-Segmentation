@@ -259,3 +259,4 @@ sbatch train.slurm
 
 - Copy **`config.json`**, **`history.csv`**, **`summary.json`** (small) into git or lab wiki if you want history versioned; **checkpoints** are large — keep on scratch or use **Git LFS** if your policy allows.
 - Update **`docs/progress_log.md`** with the cluster path, commit hash, and key hyperparameters for reproducibility.
+- **Internal k-fold:** generate fold CSVs on any machine with the manifest (`python scripts/build_splits.py --data-root . --internal-cv-folds 5`), sync them to scratch if needed, then submit **K** jobs with different **`--split-csv`** and **`--out-dir`** (Slurm **array** jobs work well). Aggregate **`summary.json`** field **`best_val_mean_fg_dice`** across folds.

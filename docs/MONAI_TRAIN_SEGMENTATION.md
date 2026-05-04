@@ -21,6 +21,7 @@ This document explains **every major block** of `scripts/monai_train_segmentatio
 13. [Training loop, checkpointing, history](#13-training-loop)
 14. [Optional final test split](#14-optional-final-test-split)
 15. [Command-line reference](#15-command-line-reference)
+16. [Internal k-fold benchmarking](#16-internal-k-fold-benchmarking)
 
 ---
 
@@ -39,7 +40,7 @@ This document explains **every major block** of `scripts/monai_train_segmentatio
 - `checkpoint_best.pt` — weights that achieved the **best mean foreground Dice on validation** so far.
 - `checkpoint_last.pt` — weights after the latest epoch.
 - `history.csv` — per-epoch `train_loss` and `val_mean_fg_dice` (when validation ran).
-- `summary.json` — best validation score and path to best checkpoint.
+- `summary.json` — **`best_val_mean_fg_dice`**, **`best_checkpoint`**.
 - If `--final-test`: `test_summary.json` — mean foreground Dice on the **external test** split.
 
 **High-level algorithm:**
@@ -576,6 +577,29 @@ Uses the **same** preprocessing as validation (`val_tf`) and the **best** checkp
 
 ---
 
+## 16. Internal k-fold benchmarking
+
+For **internal-only** cross-validation (no external rows in the split file), regenerate splits with:
+
+```bash
+python scripts/build_splits.py --data-root . --internal-cv-folds 5
+```
+
+Then train **once per fold**, pointing at each CSV:
+
+```bash
+python scripts/monai_train_segmentation.py --data-root . --media-root /path/to/data \
+  --split-csv reports/splits/internal_cv_fold_00.csv \
+  --out-dir runs/cv_fold_00 --device cuda --amp --epochs 100
+# … repeat for internal_cv_fold_01.csv, …
+```
+
+Each fold file lists only **`train`** and **`val`** rows (internal site). **Do not** use **`--final-test`** with these files: there is no **`test`** split in the CSV. Compare models using **`best_val_mean_fg_dice`** per fold (from `summary.json`; see also `history.csv`) and report **mean ± standard deviation** across folds for a more stable internal metric than a single random train/val partition.
+
+See [`docs/DATASET.md`](DATASET.md) §3.4 for how internal-only folds differ from **`mixed_site_cv_fold_*.csv`** (pooled internal + external).
+
+---
+
 ## Related scripts (train / eval / test)
 
 Training logic imports **`scripts/monai_segmentation_common.py`** (transforms, U-Net, sliding-window Dice). Line references in earlier sections still describe the same code paths; some definitions now live in that module instead of inline in `monai_train_segmentation.py`.
@@ -585,4 +609,4 @@ Training logic imports **`scripts/monai_segmentation_common.py`** (transforms, U
 
 Optional later: **bootstrap confidence intervals** on external test Dice for reporting.
 
-This document should be updated if `monai_train_segmentation.py` or `monai_segmentation_common.py` changes materially (loss, transforms, or metric definitions).
+This document should be updated if `monai_train_segmentation.py` or `monai_segmentation_common.py` changes materially (loss, transforms, or metric definitions), or if split-file conventions for CV change.

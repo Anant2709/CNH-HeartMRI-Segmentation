@@ -22,7 +22,8 @@ Useful flags:
 - `--patch-size 96 96 96` — 3D crop for training and sliding-window ROI
 - `--spacing-mm 1.2 1.2 1.2` — optional resample to fixed spacing (omit for native spacing)
 - `--amp` — mixed precision on CUDA
-- `--final-test` — after training, score the external **test** split once (no tuning on test)
+- `--split-csv path/to.csv` — override split file (default: internal train/val + external test)
+- `--final-test` — after training, score the external **test** split once (no tuning on test); skip for internal-only CV CSVs (no `test` rows)
 
 Quick sanity check (small subset, short run):
 
@@ -33,7 +34,7 @@ python scripts/monai_train_segmentation.py --data-root . --epochs 1 \\
 
 Outputs go to `runs/segmentation/` (`config.json`, `checkpoint_best.pt`, `checkpoint_last.pt`, `history.csv`, `summary.json`).
 
-Shared helpers live in `scripts/monai_segmentation_common.py`.
+Shared helpers live in `scripts/monai_segmentation_common.py`. Training stack includes **`nibabel`** (used by MONAI `Orientationd`).
 
 ## Eval and test (no training)
 
@@ -77,6 +78,6 @@ See [`docs/DATASET.md`](docs/DATASET.md). Summary: `reports/dataset_manifest.csv
 | `scripts/build_pairing_audit.py` | Scan tree → pairing CSVs |
 | `scripts/build_baseline_manifest.py` | Strict / geometry manifests |
 | `scripts/build_dataset_manifest.py` | Stage B manifest + summary |
-| `scripts/build_splits.py` | Train/val/test CSV (`--cv-folds 5` optional) |
+| `scripts/build_splits.py` | Train/val/test CSV; optional **`--internal-cv-folds K`** (internal k-fold) or **`--cv-folds K`** (mixed-site k-fold) |
 | `scripts/inspect_nrrd_dataset.py` | NRRD metadata dump |
 | `scripts/inspect_torch_checkpoint.py` | Inspect `.pt` checkpoints |
